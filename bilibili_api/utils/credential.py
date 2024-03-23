@@ -6,13 +6,14 @@ bilibili_api.utils.Credential
 
 import uuid
 from typing import Union
+import urllib.parse
 
 from ..exceptions import (
     CredentialNoBuvid3Exception,
     CredentialNoBiliJctException,
     CredentialNoSessdataException,
     CredentialNoDedeUserIDException,
-    CredentialNoAcTimeValueException
+    CredentialNoAcTimeValueException,
 )
 
 
@@ -28,6 +29,7 @@ class Credential:
         buvid3: Union[str, None] = None,
         dedeuserid: Union[str, None] = None,
         ac_time_value: Union[str, None] = None,
+        **kwargs
     ) -> None:
         """
         各字段获取方式查看：https://nemo2011.github.io/bilibili-api/#/get-credential.md
@@ -42,12 +44,24 @@ class Credential:
             dedeuserid (str | None, optional): 浏览器 Cookies 中的 DedeUserID 字段值. Defaults to None.
 
             ac_time_value (str | None, optional): 浏览器 Cookies 中的 ac_time_value 字段值. Defaults to None.
+
+        
+        其他 Cookie 参数可以直接填入，优先级低于上述参数。
         """
-        self.sessdata = sessdata
+        self.sessdata = (
+            None
+            if sessdata is None
+            else (
+                sessdata if sessdata.find("%") != -1 else urllib.parse.quote(sessdata)
+            )
+        )
         self.bili_jct = bili_jct
         self.buvid3 = buvid3
         self.dedeuserid = dedeuserid
         self.ac_time_value = ac_time_value
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def get_cookies(self) -> dict:
         """
@@ -56,13 +70,20 @@ class Credential:
         Returns:
             dict: 请求 Cookies 字典
         """
-        return {
+        cookies = {
             "SESSDATA": self.sessdata,
-            "buvid3": self.buvid3 if self.buvid3 else str(uuid.uuid1()) + "infoc",
+            "buvid3": self.buvid3,
             "bili_jct": self.bili_jct,
-            "DedeUserID": self.dedeuserid,
             "ac_time_value": self.ac_time_value,
         }
+        if self.dedeuserid:
+            cookies.update({"DedeUserID": self.dedeuserid})
+
+        # 填入所有其他参数
+        for key, value in self.__dict__.items():
+            if key not in cookies and value is not None:
+                cookies[key] = value
+        return cookies
 
     def has_dedeuserid(self) -> bool:
         """
